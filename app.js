@@ -1,5 +1,6 @@
 (function () {
   'use strict';
+  const VER = 14;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -309,11 +310,11 @@
   }
   function showSnd() {   // 画面の下に、音の状態を出す(鳴らないときの原因を知るため)
     const e = $('snd'); if (!e) return;
-    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? '' : ' / 停止中');
+    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 版 '+VER;
     if (e.textContent !== t) e.textContent = t;
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
-  function setDancing(v) { dancing = v; applyVolume(); if (v && actx && actx.state === 'suspended') actx.resume().catch(() => {}); }
+  function setDancing(v) { dancing = v; applyVolume(); if (v && actx && actx.state !== 'running') actx.resume().catch(() => {}); }
 
   function idb() {
     return new Promise((res, rej) => { const r = indexedDB.open('onigiri', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
