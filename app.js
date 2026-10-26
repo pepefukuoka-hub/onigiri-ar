@@ -163,7 +163,7 @@
         shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.004; root.add(shadow);
 
         // ふるまいの状態
-        this.mode = 'dance'; this.timer = 1; this.danceOn = true; this.dAmp = 0;   // はじめから踊る this.target = { x: 0, z: 0 }; this.run = false;
+        this.seenOnce = false; this.mode = 'dance'; this.timer = 1; this.danceOn = true; this.dAmp = 0;   // はじめから踊る this.target = { x: 0, z: 0 }; this.run = false;
         this.yaw = 0; this.phase = 0; this.amp = 0; this.hop = -1; this.blink = 3; this.blinkT = -1; this.away = 0; this.started = false;
         this.heading = { x: 0, z: 1 }; this.shown = '';
         this.cp = new THREE.Vector3(); this.f = new THREE.Vector3(); this.u = new THREE.Vector3(); this.pp = new THREE.Vector3();
@@ -209,14 +209,16 @@
 
         if (!this.started) {
           this.started = true;
-          pos.set(cp.x + this.heading.x * 0.8 * this.data.dist, 0, cp.z + this.heading.z * 0.8 * this.data.dist);
-          this.yaw = Math.atan2(-this.heading.x, -this.heading.z);
+          // はじめは、視界に入らないように、あなたの真左に置く(左を向くと見つかる)
+          const lx = this.heading.z, lz = -this.heading.x;
+          pos.set(cp.x + lx * 0.9 * this.data.dist, 0, cp.z + lz * 0.9 * this.data.dist);
+          this.yaw = Math.atan2(cp.x - pos.x, cp.z - pos.z);
         }
 
         // 見ている方向から外れたら、追いかけて前に回りこむ。決めた距離より離れたら、走って戻る
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
         const off = Math.abs(wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)));
-        this.away = off > 0.9 ? this.away + dt : 0;
+        this.away = off > 0.9 && this.seenOnce ? this.away + dt : 0;   // いちど見つけてもらうまでは、追いかけない
         if ((dC > this.data.dist || this.away > 1.5) && !this.run) { this.pickTarget(true); this.away = 0; }
 
         if (this.mode === 'idle') {
@@ -281,7 +283,9 @@
         const q = this.pq || (this.pq = new THREE.Vector3());
         q.set(pos.x, 0.85 * this.data.size, pos.z).project(cam);
         const inV = (p) => p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
-        setSeen(inV(this.pp) || inV(q));                      // 視界に入っているか(音の大きさに使う)
+        const vis = inV(this.pp) || inV(q);
+        if (vis) this.seenOnce = true;
+        setSeen(vis);                      // 視界に入っているか(音の大きさに使う)
         const find = $('find'); let msg = '';
         if (this.pp.z > 1) msg = wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)) > 0 ? '→ 右にいるよ' : '← 左にいるよ';
         else if (this.pp.x > 1) msg = '→ 右にいるよ';
