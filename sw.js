@@ -1,5 +1,5 @@
 // 一度開いたあとは、電波がなくても開けるようにする(自分のファイルだけを保存)
-const CACHE = 'onigiri-v20';
+const CACHE = 'onigiri-v21';
 const FILES = ['./', 'index.html', 'app.js', 'style.css', 'vendor/aframe.min.js', 'manifest.webmanifest', 'icon-180.png', 'icon-512.png', 'bgm.m4a'];
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', (e) => {

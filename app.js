@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 20;
+  const VER = 21;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -25,9 +25,11 @@
   $('size').value = get('onigiri.size2', '0.8') || '0.8';
   $('eye').value = get('onigiri.eye', '1.4') || '1.4';
   $('dist').value = get('onigiri.dist2', '2') || '2';
+  $('chase').value = get('onigiri.chase', '1') || '1';
   if (!$('size').value) $('size').value = '0.8';
   if (!$('eye').value) $('eye').value = '1.4';
   if (!$('dist').value) $('dist').value = '2';
+  if (!$('chase').value) $('chase').value = '1';
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -81,18 +83,28 @@
       }
     });
 
-    // 歩数を数えて、歩いた分だけ、自分(カメラ)の位置を進める。向きは、スマホが向いている方向
+    // 歩数を数えて、歩いた分だけ、自分(カメラ)の位置を進める。向きは、スマホが向いている方向。
+    // スマホを振っただけ(探して見回す、持ち替える)では、歩いたと数えない。一定のリズムで3回続いたときだけ、歩いたと見なす
     AFRAME.registerComponent('step-walk', {
       init: function () {
-        this.base = 9.8; this.prevD = 0; this.last = 0; this.pend = { x: 0, z: 0 };
+        this.base = 9.8; this.prevD = 0; this.last = 0; this.peaks = []; this.walkUntil = 0; this.pend = { x: 0, z: 0 };
         window.addEventListener('devicemotion', (e) => {
           const g = e.accelerationIncludingGravity; if (!g) return;
           const m = Math.hypot(g.x || 0, g.y || 0, g.z || 0), t = performance.now();
           this.base += (m - this.base) * 0.05;          // 重力の分は、ゆっくり追従させて引く
           const d = m - this.base;
-          if (d > 1.4 && this.prevD <= 1.4 && t - this.last > 320) { this.last = t; this.onStep(); }
+          if (d > 1.6 && this.prevD <= 1.6 && t - this.last > 300) { this.last = t; this.onPeak(t); }
           this.prevD = d;
         });
+      },
+      onPeak: function (t) {
+        const P = this.peaks; P.push(t); while (P.length && t - P[0] > 3000) P.shift();
+        if (P.length < 3) return;
+        const i1 = P[P.length - 1] - P[P.length - 2], i2 = P[P.length - 2] - P[P.length - 3], ok = (x) => x >= 300 && x <= 1100;
+        if (ok(i1) && ok(i2) && Math.abs(i1 - i2) <= 0.35 * Math.max(i1, i2)) {   // 間隔が、0.3〜1.1秒で、そろっている
+          if (t > this.walkUntil) { this.onStep(); this.onStep(); }               // 歩き始めの、数えそびれた2歩を足す
+          this.onStep(); this.walkUntil = t + 1500;
+        }
       },
       onStep: function () {
         const pe = this.el.sceneEl.querySelector('#pet'), p = pe && pe.components.pet; if (!p) return;
@@ -264,7 +276,10 @@
         }
 
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
-        if (!this.run && (dC > this.data.dist + 0.3 || dC < 0.7)) this.chase();   // 離れたら追いかける。近づきすぎたら、よける   // 踊っていても、止まっていても、離れたら追いかける
+        if (dC > Math.max(6, this.data.dist * 3)) {   // 置き去りになったら、近くに呼び戻す(自分の左側)
+          const lx = this.heading.z, lz = -this.heading.x;
+          pos.set(cp.x + lx * 0.9 * this.data.dist, 0, cp.z + lz * 0.9 * this.data.dist); this.run = false; this.mode = this.danceOn ? 'dance' : 'idle';
+        } else if (!this.run && (dC > this.data.dist + 0.3 || dC < 0.7)) this.chase();   // 離れたら追いかける。近づきすぎたら、よける   // 踊っていても、止まっていても、離れたら追いかける
 
         if (this.danceOn && this.mode !== 'dance' && !this.run) { this.mode = 'dance'; }   // 踊る設定のときは、追いかけていないとき、いつでも踊る
         if (this.mode === 'idle') {
@@ -448,7 +463,7 @@
       actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
       if (navigator.audioSession) navigator.audioSession.type = 'playback';   // 消音スイッチがオンでも鳴らす(対応する端末のみ)
     } catch (e) { actx = null; }
-    put('onigiri.size2', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
+    put('onigiri.size2', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value); put('onigiri.chase', $('chase').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
     step('1/3 モーションの許可');
@@ -481,13 +496,13 @@
     document.body.classList.add('ar');
     v.play().catch(() => {});
 
-    const size = parseFloat($('size').value), eye = parseFloat($('eye').value), dist = parseFloat($('dist').value);
+    const size = parseFloat($('size').value), eye = parseFloat($('eye').value), dist = parseFloat($('dist').value), chase = $('chase').value === '1';
     const scene = document.createElement('a-scene');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('renderer', 'alpha: true; antialias: true');
     scene.setAttribute('embedded', '');
     scene.innerHTML =
-      '<a-entity camera="fov: 65; near: 0.05; far: 500" position="0 ' + eye + ' 0" device-look step-walk></a-entity>' +
+      '<a-entity camera="fov: 65; near: 0.05; far: 500" position="0 ' + eye + ' 0" device-look ' + (chase ? 'step-walk' : '') + '></a-entity>' +
       '<a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>' +
       '<a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="1 3 2"></a-entity>' +
       '<a-entity id="pet" pet="size: ' + size + '; dist: ' + dist + '"></a-entity>';

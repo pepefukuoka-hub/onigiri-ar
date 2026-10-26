@@ -9,7 +9,7 @@
 <title>にぎにぎ</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
-<link rel="stylesheet" href="style.css?v=20">
+<link rel="stylesheet" href="style.css?v=21">
 </head>
 <body class="locked">
 
@@ -43,6 +43,12 @@
     <option value="4">もっと遠く(4 m)</option>
   </select>
 
+  <label for="chase">歩いたときの追いかけ</label>
+  <select id="chase">
+    <option value="1" selected>歩くと、走って追いかける</option>
+    <option value="0">追いかけない(その場にいる)</option>
+  </select>
+
   <label for="eye">スマホを持つ高さ(目線)</label>
   <select id="eye">
     <option value="0.5">地面すれすれ(0.5 m)</option>
@@ -60,7 +66,7 @@
 
   <button type="button" id="go" class="primary">はじめる</button>
   <p class="msg" id="msg" role="status"></p>
-  <p class="msg">版 20</p>
+  <p class="msg">版 21</p>
 
   <ul class="tips">
     <li>はじめに、モーションとカメラの許可を求められます。位置情報は使いません。</li>
@@ -83,6 +89,6 @@
 <div id="arrow" aria-live="polite"></div>
 <div id="snd" aria-live="off"></div>
 
-<script src="app.js?v=20"></script>
+<script src="app.js?v=21"></script>
 </body>
 </html>
