@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 15;
+  const VER = 16;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
