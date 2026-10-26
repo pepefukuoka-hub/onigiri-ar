@@ -11,7 +11,17 @@
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="locked">
+
+<main id="lock">
+  <h1>にぎにぎ</h1>
+  <form id="lockForm" autocomplete="off">
+    <label for="pw">パスワード</label>
+    <input type="password" id="pw" inputmode="numeric" autocomplete="off" maxlength="32">
+    <button type="submit" class="primary">ひらく</button>
+    <p class="msg" id="lockMsg" role="status"></p>
+  </form>
+</main>
 
 <main id="start">
   <h1>にぎにぎ</h1>

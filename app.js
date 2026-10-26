@@ -4,6 +4,23 @@
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
+  // ---------- ロック(うっかり触られないための簡易ロック。公開サイトなので、本気の防御ではない) ----------
+  const PW_HASH = 'ca70b84c07d879056f5de82b2e8dd64a2e7e61059ed4df6b1370d791e016b5c4';
+  async function sha256(s) {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return Array.from(new Uint8Array(b)).map((x) => x.toString(16).padStart(2, '0')).join('');
+  }
+  function unlocked() { try { return sessionStorage.getItem('onigiri.ok') === '1'; } catch (e) { return false; } }
+  if (unlocked()) document.body.classList.remove('locked');
+  $('lockForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const pw = $('pw').value; let ok = false;
+    try { ok = (await sha256('onigiri-ar:' + pw)) === PW_HASH; } catch (err) { $('lockMsg').textContent = 'この環境では確認できません。'; return; }
+    if (ok) { try { sessionStorage.setItem('onigiri.ok', '1'); } catch (err) {} document.body.classList.remove('locked'); $('pw').value = ''; return; }
+    $('lockMsg').textContent = 'パスワードが違います。'; $('pw').value = '';
+    const b = $('lockForm').querySelector('button'); b.disabled = true; setTimeout(() => { b.disabled = false; }, 2000);   // 続けて試しにくくする
+  };
+
   $('size').value = get('onigiri.size2', '0.8') || '0.8';
   $('eye').value = get('onigiri.eye', '1.4') || '1.4';
   $('dist').value = get('onigiri.dist2', '2') || '2';
