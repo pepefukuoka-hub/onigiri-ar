@@ -163,7 +163,8 @@
         shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.004; root.add(shadow);
 
         // ふるまいの状態
-        this.seenOnce = false; this.mode = 'dance'; this.timer = 1; this.danceOn = true; this.dAmp = 0;   // はじめから踊る this.target = { x: 0, z: 0 }; this.run = false;
+        this.seenOnce = false; this.mode = 'dance'; this.timer = 1; this.danceOn = true; this.dAmp = 0;   // はじめから踊る
+        this.target = { x: 0, z: 0 }; this.run = false;
         this.yaw = 0; this.phase = 0; this.amp = 0; this.hop = -1; this.blink = 3; this.blinkT = -1; this.away = 0; this.started = false;
         this.heading = { x: 0, z: 1 }; this.shown = '';
         this.cp = new THREE.Vector3(); this.f = new THREE.Vector3(); this.u = new THREE.Vector3(); this.pp = new THREE.Vector3();
@@ -195,12 +196,15 @@
         if (l > 0.05) { this.heading.x = hx / l; this.heading.z = hz / l; }
       },
       pickTarget: function (run) {
-        const a = Math.atan2(this.heading.x, this.heading.z) + (Math.random() - 0.5) * 0.9, r = (0.6 + Math.random() * 0.35) * this.data.dist;
+        const a = Math.random() * Math.PI * 2, r = (0.5 + Math.random() * 0.5) * this.data.dist;   // まわりのどこかへ(画面の向きには合わせない)
         this.target.x = this.cp.x + Math.sin(a) * r; this.target.z = this.cp.z + Math.cos(a) * r;
         this.mode = 'walk'; this.run = !!run;
       },
 
-      tick: function (time, dtms) {
+      // 1回のエラーで、描画全体が止まらないようにする
+      tick: function (time, dtms) { try { this.step(time, dtms); } catch (e) { if (!this.errShown) { this.errShown = true; console.error(e); } } },
+
+      step: function (time, dtms) {
         const cam = this.el.sceneEl.camera; if (!cam) return;
         const dt = Math.min(dtms, 100) / 1000, pos = this.el.object3D.position;
         cam.getWorldPosition(this.cp);
@@ -215,11 +219,8 @@
           this.yaw = Math.atan2(cp.x - pos.x, cp.z - pos.z);
         }
 
-        // 見ている方向から外れたら、追いかけて前に回りこむ。決めた距離より離れたら、走って戻る
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
-        const off = Math.abs(wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)));
-        this.away = off > 0.9 && this.seenOnce ? this.away + dt : 0;   // いちど見つけてもらうまでは、追いかけない
-        if ((dC > this.data.dist || this.away > 1.5) && !this.run) { this.pickTarget(true); this.away = 0; }
+        if (dC > this.data.dist && !this.run) this.pickTarget(true);   // 決めた距離より離れたら、戻る
 
         if (this.mode === 'idle') {
           this.timer -= dt;
@@ -444,7 +445,8 @@
     const p = document.getElementById('pet'), c = p && p.components.pet;
     if (!c) return;
     c.danceOn = !c.danceOn;
-    if (!c.danceOn && c.mode === 'dance') { c.mode = 'idle'; c.timer = 1; }
+    if (c.danceOn) { c.mode = 'dance'; c.run = false; }   // 押したら、すぐ踊る
+    else if (c.mode === 'dance') { c.mode = 'idle'; c.timer = 1; }
     setDancing(c.danceOn);   // やめると、音も止まる
     $('dance').textContent = c.danceOn ? 'ダンスをやめる' : 'ダンス';
   };
