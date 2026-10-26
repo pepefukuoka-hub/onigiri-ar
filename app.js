@@ -6,8 +6,10 @@
 
   $('size').value = get('onigiri.size', '0.5') || '0.5';
   $('eye').value = get('onigiri.eye', '1.4') || '1.4';
+  $('dist').value = get('onigiri.dist', '1.6') || '1.6';
   if (!$('size').value) $('size').value = '0.5';
   if (!$('eye').value) $('eye').value = '1.4';
+  if (!$('dist').value) $('dist').value = '1.6';
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -20,7 +22,7 @@
   // ---------- 部品 ----------
   function registerComponents() {
     // 端末の向きでカメラを回す(three.js の DeviceOrientationControls と同じ計算)。
-    // 位置は使わない。カメラは原点に固定し、おともが、いつも1メートル以内にいる。
+    // 位置は使わない。カメラは原点に固定し、おともが、いつも決めた距離の中にいる。
     AFRAME.registerComponent('device-look', {
       init: function () {
         this.ori = null; this.count = 0; this.yaw = 0; this.pitch = -0.9;   // パソコンでは、足元を向いた状態から始める
@@ -85,7 +87,7 @@
     }
 
     AFRAME.registerComponent('pet', {
-      schema: { size: { default: 0.5 } },
+      schema: { size: { default: 0.5 }, dist: { default: 1.6 } },
       init: function () {
         const CY = 0.47;                                  // 体の中心の高さ(足は 0.17)
         const root = this.el.object3D;
@@ -176,7 +178,7 @@
         if (l > 0.05) { this.heading.x = hx / l; this.heading.z = hz / l; }
       },
       pickTarget: function (run) {
-        const a = Math.atan2(this.heading.x, this.heading.z) + (Math.random() - 0.5) * 0.9, r = 0.6 + Math.random() * 0.35;
+        const a = Math.atan2(this.heading.x, this.heading.z) + (Math.random() - 0.5) * 0.9, r = (0.6 + Math.random() * 0.35) * this.data.dist;
         this.target.x = this.cp.x + Math.sin(a) * r; this.target.z = this.cp.z + Math.cos(a) * r;
         this.mode = 'walk'; this.run = !!run;
       },
@@ -190,15 +192,15 @@
 
         if (!this.started) {
           this.started = true;
-          pos.set(cp.x + this.heading.x * 0.8, 0, cp.z + this.heading.z * 0.8);
+          pos.set(cp.x + this.heading.x * 0.8 * this.data.dist, 0, cp.z + this.heading.z * 0.8 * this.data.dist);
           this.yaw = Math.atan2(-this.heading.x, -this.heading.z);
         }
 
-        // 見ている方向から外れたら、追いかけて前に回りこむ。1メートルより離れたら、走って戻る
+        // 見ている方向から外れたら、追いかけて前に回りこむ。決めた距離より離れたら、走って戻る
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
         const off = Math.abs(wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)));
         this.away = off > 0.9 ? this.away + dt : 0;
-        if ((dC > 1.0 || this.away > 1.5) && !this.run) { this.pickTarget(true); this.away = 0; }
+        if ((dC > this.data.dist || this.away > 1.5) && !this.run) { this.pickTarget(true); this.away = 0; }
 
         if (this.mode === 'idle') {
           this.timer -= dt;
@@ -213,9 +215,9 @@
             this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 8);
           }
         }
-        // 半径1メートルの外には、出さない
-        const ex = pos.x - cp.x, ez = pos.z - cp.z, el = Math.hypot(ex, ez);
-        if (el > 1.0) { pos.x = cp.x + ex / el; pos.z = cp.z + ez / el; }
+        // 決めた距離の外には、出さない
+        const ex = pos.x - cp.x, ez = pos.z - cp.z, el = Math.hypot(ex, ez), R = this.data.dist;
+        if (el > R) { pos.x = cp.x + ex / el * R; pos.z = cp.z + ez / el * R; }
 
         // ---- 動き ----
         const moving = this.mode === 'walk';
@@ -267,7 +269,7 @@
     if (started) return;
     $('go').disabled = true;
     $('msg').textContent = '許可を確認しています…';
-    put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value);
+    put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist', $('dist').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
     try {
@@ -292,7 +294,7 @@
     document.body.classList.add('ar');
     v.play().catch(() => {});
 
-    const size = parseFloat($('size').value), eye = parseFloat($('eye').value);
+    const size = parseFloat($('size').value), eye = parseFloat($('eye').value), dist = parseFloat($('dist').value);
     const scene = document.createElement('a-scene');
     scene.setAttribute('vr-mode-ui', 'enabled: false');
     scene.setAttribute('renderer', 'alpha: true; antialias: true');
@@ -301,7 +303,7 @@
       '<a-entity camera="fov: 65; near: 0.05; far: 50" position="0 ' + eye + ' 0" device-look></a-entity>' +
       '<a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>' +
       '<a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="1 3 2"></a-entity>' +
-      '<a-entity id="pet" pet="size: ' + size + '"></a-entity>';
+      '<a-entity id="pet" pet="size: ' + size + '; dist: ' + dist + '"></a-entity>';
     scene.addEventListener('loaded', () => { if (scene.renderer) scene.renderer.setClearColor(0x000000, 0); });
     $('host').appendChild(scene);
     $('hud').hidden = false;

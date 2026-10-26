@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f4efe6">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="おとも">
-<title>おにぎりのおとも</title>
+<meta name="apple-mobile-web-app-title" content="にぎにぎ">
+<title>にぎにぎ</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="stylesheet" href="style.css">
@@ -14,14 +14,22 @@
 <body>
 
 <main id="start">
-  <h1>おにぎりのおとも</h1>
-  <p class="lead">スマホのカメラ越しに、足元の1メートル以内で、まるいおともが、ついてきます。</p>
+  <h1>にぎにぎ</h1>
+  <p class="lead">スマホのカメラ越しに、足元の近くを、まるいおともが、ついてきます。</p>
 
   <label for="size">おおきさ</label>
   <select id="size">
     <option value="0.3">小さい(30 cm)</option>
     <option value="0.5" selected>ふつう(50 cm)</option>
     <option value="0.8">大きい(80 cm)</option>
+  </select>
+
+  <label for="dist">はなれる距離(あなたからの半径)</label>
+  <select id="dist">
+    <option value="1">近め(1 m)</option>
+    <option value="1.6" selected>ふつう(1.6 m)</option>
+    <option value="2.5">遠め(2.5 m)</option>
+    <option value="4">もっと遠く(4 m)</option>
   </select>
 
   <label for="eye">スマホを持つ高さ(目線)</label>
