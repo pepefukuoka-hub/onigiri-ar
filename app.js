@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 19;
+  const VER = 20;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -436,12 +436,13 @@
 
   // ---------- 開始 ----------
   let started = false, stream = null;
-  function fail(msg) { $('msg').textContent = msg; $('go').disabled = false; }
+  function fail(msg) { $('msg').textContent = '⚠ ' + msg; $('msg').style.color = '#e5484d'; $('go').disabled = false; }
+  function step(t) { $('msg').style.color = ''; $('msg').textContent = '準備中 ' + t + ' …'; }
+  const errName = (e) => (e && (e.name || e.message)) ? String(e.name || e.message) : '不明';
 
   async function start() {
     if (started) return;
     $('go').disabled = true;
-    $('msg').textContent = '許可を確認しています…';
     // 音は、ボタンを押したこの場面で使えるようにしておく(iPhoneの決まり)
     try {
       actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
@@ -450,23 +451,29 @@
     put('onigiri.size2', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
+    step('1/3 モーションの許可');
     try {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        const pm = (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') ? DeviceMotionEvent.requestPermission().catch(() => 'denied') : null;   // 歩数用
         const r = await DeviceOrientationEvent.requestPermission();
-        if (pm) await pm;
         if (r !== 'granted') { fail('モーションと方向のアクセスが許可されていません。設定 > Safari > モーションと方向のアクセス をオンにして、ページを開き直してください。'); return; }
       }
-    } catch (e) { fail('モーションの許可を取得できませんでした。ページを開き直して、もう一度押してください。'); return; }
+    } catch (e) { fail('モーションの許可を取得できませんでした(' + errName(e) + ')。ページを開き直して、もう一度押してください。'); return; }
+    // 歩数用の加速度。許可されなくても進める(歩数が数えられないだけ)。固まらないよう、5秒で打ち切る
+    try {
+      if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') {
+        await Promise.race([DeviceMotionEvent.requestPermission().catch(() => 'denied'), new Promise((res) => setTimeout(res, 5000))]);
+      }
+    } catch (e) {}
 
     // 2. カメラ
+    step('2/3 カメラの許可');
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false });
-    } catch (e) { fail('カメラが許可されていません。設定 > Safari > カメラ で許可して、ページを開き直してください。'); return; }
+    } catch (e) { fail('カメラを開けませんでした(' + errName(e) + ')。設定 > Safari > カメラ で許可し、ほかのアプリやタブがカメラを使っていないか確認して、ページを開き直してください。'); return; }
 
-    $('msg').textContent = '準備しています…';
+    step('3/3 画面の準備');
     try { await loadScript('vendor/aframe.min.js'); registerComponents(); }
-    catch (e) { fail('部品を読み込めませんでした。通信を確認して、ページを開き直してください。'); return; }
+    catch (e) { fail('部品を読み込めませんでした(' + errName(e) + ')。通信を確認して、ページを開き直してください。'); return; }
 
     started = true;
     const v = $('cam');
