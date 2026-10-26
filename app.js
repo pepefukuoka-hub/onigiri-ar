@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 14;
+  const VER = 15;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -221,8 +221,9 @@
         }
 
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
-        if (dC > this.data.dist && !this.run) this.pickTarget(true);   // 決めた距離より離れたら、戻る
+        if (dC > this.data.dist + 0.05 && !this.run && !this.danceOn) this.pickTarget(true);   // 決めた距離より離れたら、戻る
 
+        if (this.danceOn && this.mode !== 'dance') { this.mode = 'dance'; this.run = false; }   // 踊る設定のときは、いつでも踊る
         if (this.mode === 'idle') {
           this.timer -= dt;
           if (this.danceOn) this.mode = 'dance';
