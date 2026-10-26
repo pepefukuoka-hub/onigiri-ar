@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 22;
+  const VER = 23;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -311,6 +311,8 @@
         const moving = this.mode === 'walk';
         this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 8);
         if (moving) this.phase += dt * (this.run ? 20 : 9);
+        const stepK = Math.floor(this.phase / Math.PI);
+        if (moving && stepK !== this.lastK) { this.lastK = stepK; puni(this.run, stepK & 1); }   // 1歩ごとに、ぷにっ
         const sw = Math.sin(this.phase) * this.amp, t = time / 1000;
         this.legL.rotation.x = sw * 0.75; this.legR.rotation.x = -sw * 0.75;
         let by = Math.abs(Math.sin(this.phase)) * 0.035 * (this.run ? 1.6 : 1) * this.amp + Math.sin(t * 3) * 0.006 * (1 - this.amp);
@@ -387,6 +389,23 @@
     const e = $('snd'); if (!e) return;
     const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 歩数 ' + stepCount + (petDbg ? '\n' + petDbg : '') + ' / 版 '+VER;
     if (e.textContent !== t) e.textContent = t;
+  }
+  // 歩く足音「ぷに」。やわらかく、ぽこっと潰れる音。1歩ごとに、高さを少し変える
+  let lastPuni = 0;
+  function puni(run, odd) {
+    if (!actx || actx.state !== 'running') return;
+    const now = actx.currentTime;
+    if (now - lastPuni < 0.09) return; lastPuni = now;
+    const vol = (seen ? 0.5 : 0.1) * (run ? 0.7 : 1);
+    const base = odd ? 430 : 360, g = actx.createGain(), lp = actx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 1500;
+    g.gain.setValueAtTime(0.0001, now); g.gain.exponentialRampToValueAtTime(vol, now + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, now + 0.16);
+    [[1, 1], [2, 0.25]].forEach(([mul, amp]) => {   // 基本の音と、1オクターブ上の少しの音
+      const o = actx.createOscillator(), og = actx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(base * mul * 1.25, now); o.frequency.exponentialRampToValueAtTime(base * mul * 0.62, now + 0.12);   // 音が下がる: ぷにっ
+      og.gain.value = amp; o.connect(og); og.connect(lp); o.start(now); o.stop(now + 0.18);
+    });
+    lp.connect(g); g.connect(actx.destination);
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
   function setDancing(v) { dancing = v; applyVolume(); if (v && actx && actx.state !== 'running') actx.resume().catch(() => {}); }
