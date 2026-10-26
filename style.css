@@ -50,14 +50,14 @@ body.ar #host { display: block; }
 #hud { position: fixed; z-index: 10; left: 0; right: 0; top: 0; display: flex; gap: 8px; align-items: flex-start; pointer-events: none;
   padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 #hud > * { pointer-events: auto; }
-#exit, #dance { width: auto; min-height: 44px; background: rgba(20,20,20,.7); color: #fff; border-color: transparent; white-space: nowrap; }
+#exit, #dance, #call { width: auto; min-height: 44px; background: rgba(20,20,20,.7); color: #fff; border-color: transparent; white-space: nowrap; }
 #find { flex: 1; min-width: 0; text-align: center; color: #fff; font-weight: 700; font-size: 16px;
   background: rgba(20,20,20,.7); border-radius: 12px; padding: 9px 12px; }
 #find:empty { visibility: hidden; }
 button.small { width: auto; min-height: 36px; padding: 6px 14px; font-size: 14px; align-self: flex-start; }
 input[type=file] { font: inherit; color: var(--fg); width: 100%; }
 #snd { display: none; }
-body.ar #snd { display: block; position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; pointer-events: none; text-align: center; font-size: 12px; color: #fff;
+body.ar #snd { white-space: pre-line; display: block; position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; pointer-events: none; text-align: center; font-size: 12px; color: #fff;
   background: rgba(20,20,20,.55); padding: 6px 12px max(6px, env(safe-area-inset-bottom, 0px)); }
 
 /* ロック画面。ひらくまでは、ほかを見せない */

@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 21;
+  const VER = 22;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -246,6 +246,12 @@
         this.target.x = this.cp.x + dx / l * 0.8 * this.data.dist; this.target.z = this.cp.z + dz / l * 0.8 * this.data.dist;
         this.mode = 'walk'; this.run = true;
       },
+      // 見失ったとき: 目の前(見ている方向)に呼ぶ
+      callIn: function () {
+        const R = this.data.dist * 0.9, pos = this.el.object3D.position;
+        pos.set(this.cp.x + this.heading.x * R, 0, this.cp.z + this.heading.z * R);
+        this.run = false; this.mode = this.danceOn ? 'dance' : 'idle'; this.timer = 1;
+      },
       pickTarget: function (run) {
         const a = Math.random() * Math.PI * 2, r = (0.5 + Math.random() * 0.5) * this.data.dist;   // まわりのどこかへ(画面の向きには合わせない)
         this.target.x = this.cp.x + Math.sin(a) * r; this.target.z = this.cp.z + Math.cos(a) * r;
@@ -342,6 +348,13 @@
         q.set(pos.x, 0.85 * this.data.size, pos.z).project(cam);
         const inV = (p) => p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
         const vis = inV(this.pp) || inV(q);
+        if (!this.dbgT || time - this.dbgT > 500) {   // 見失ったときの手がかり(角度は、見ている方向から。+は右、-は左)
+          this.dbgT = time;
+          const dl = this.el.sceneEl.querySelector('[device-look]'), dlc = dl && dl.components['device-look'];
+          const rel = wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)) * 180 / Math.PI;
+          const cx = this.f.x, cy = this.f.y, cz = this.f.z;
+          petDbg = 'おにぎり: 見ている方向から ' + Math.round(-rel) + '° / 距離 ' + dC.toFixed(1) + ' m / ' + (vis ? '画面の中' : '画面の外') + ' / 向きの信号 ' + (dlc ? dlc.count : 0) + '回 / 傾き ' + Math.round(Math.asin(Math.max(-1, Math.min(1, cy))) * 180 / Math.PI) + '°';
+        }
         if (vis) this.seenOnce = true;
         setSeen(vis);                      // 視界に入っているか(音の大きさに使う)
         const find = $('find'); let msg = '';
@@ -364,7 +377,7 @@
   // 自分で選んだビデオや音声の音を、ループで流す。おともが視界にいる間は大きく、外れると小さくする。
   // 音のファイルは、この端末の中(IndexedDB)にだけ保存し、公開サイトには入れない。
   const LOW = 0.12;
-  let stepCount = 0;
+  let stepCount = 0, petDbg = '';
   let actx = null, bgmGain = null, bgmData = null, bgmType = '', seen = false, dancing = true, sndState = '';
   function applyVolume() {
     if (!bgmGain) return;
@@ -372,7 +385,7 @@
   }
   function showSnd() {   // 画面の下に、音の状態を出す(鳴らないときの原因を知るため)
     const e = $('snd'); if (!e) return;
-    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 歩数 ' + stepCount + ' / 版 '+VER;
+    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 歩数 ' + stepCount + (petDbg ? '\n' + petDbg : '') + ' / 版 '+VER;
     if (e.textContent !== t) e.textContent = t;
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
@@ -521,6 +534,10 @@
     setInterval(showSnd, 700); showSnd();
   }
   $('go').onclick = start;
+  $('call').onclick = () => {
+    const p = document.getElementById('pet'), c = p && p.components.pet;
+    if (c && c.started) c.callIn();
+  };
   $('dance').onclick = () => {
     const p = document.getElementById('pet'), c = p && p.components.pet;
     if (!c) return;
