@@ -146,7 +146,7 @@
         shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.004; root.add(shadow);
 
         // ふるまいの状態
-        this.mode = 'idle'; this.timer = 1; this.danceOn = false; this.dAmp = 0; this.target = { x: 0, z: 0 }; this.run = false;
+        this.mode = 'dance'; this.timer = 1; this.danceOn = true; this.dAmp = 0;   // はじめから踊る this.target = { x: 0, z: 0 }; this.run = false;
         this.yaw = 0; this.phase = 0; this.amp = 0; this.hop = -1; this.blink = 3; this.blinkT = -1; this.away = 0; this.started = false;
         this.heading = { x: 0, z: 1 }; this.shown = '';
         this.cp = new THREE.Vector3(); this.f = new THREE.Vector3(); this.u = new THREE.Vector3(); this.pp = new THREE.Vector3();
@@ -204,12 +204,12 @@
 
         if (this.mode === 'idle') {
           this.timer -= dt;
-          if (this.danceOn || (this.timer <= 0 && Math.random() < 0.35)) { this.mode = 'dance'; this.timer = 4 + Math.random() * 3; }
+          if (this.danceOn) this.mode = 'dance';
           else if (this.timer <= 0) { if (Math.random() < 0.3) this.timer = 1.5 + Math.random() * 2; else this.pickTarget(false); }
           this.yaw += wrap(Math.atan2(cp.x - pos.x, cp.z - pos.z) - this.yaw) * Math.min(1, dt * 4);   // こちらを向く
         } else if (this.mode === 'dance') {
           this.timer -= dt;
-          if (!this.danceOn && this.timer <= 0) { this.mode = 'idle'; this.timer = 1; }
+          if (!this.danceOn) { this.mode = 'idle'; this.timer = 1; }
           this.yaw += wrap(Math.atan2(cp.x - pos.x, cp.z - pos.z) - this.yaw) * Math.min(1, dt * 4);
         } else {
           const dx = this.target.x - pos.x, dz = this.target.z - pos.z, d = Math.hypot(dx, dz), sp = this.run ? 1.3 : 0.45;
@@ -261,6 +261,10 @@
 
         // 画面の外にいるときは、方向を知らせる
         this.pp.set(pos.x, 0.3 * this.data.size, pos.z).project(cam);
+        const q = this.pq || (this.pq = new THREE.Vector3());
+        q.set(pos.x, 0.85 * this.data.size, pos.z).project(cam);
+        const inV = (p) => p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1;
+        setSeen(inV(this.pp) || inV(q));                      // 視界に入っているか(音の大きさに使う)
         const find = $('find'); let msg = '';
         if (this.pp.z > 1) msg = wrap(Math.atan2(pos.x - cp.x, pos.z - cp.z) - Math.atan2(this.heading.x, this.heading.z)) > 0 ? '→ 右にいるよ' : '← 左にいるよ';
         else if (this.pp.x > 1) msg = '→ 右にいるよ';
@@ -272,6 +276,71 @@
     });
   }
 
+  // ---------- 音 ----------
+  // 自分で選んだビデオや音声の音を、ループで流す。おともが視界にいる間は大きく、外れると小さくする。
+  // 音のファイルは、この端末の中(IndexedDB)にだけ保存し、公開サイトには入れない。
+  const LOW = 0.12;
+  let actx = null, bgmGain = null, bgmData = null, bgmType = '', seen = false, dancing = true;
+  function applyVolume() {
+    if (!bgmGain) return;
+    bgmGain.gain.setTargetAtTime(!dancing ? 0 : (seen ? 1 : LOW), actx.currentTime, 0.15);
+  }
+  function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
+  function setDancing(v) { dancing = v; applyVolume(); if (v && actx && actx.state === 'suspended') actx.resume().catch(() => {}); }
+
+  function idb() {
+    return new Promise((res, rej) => { const r = indexedDB.open('onigiri', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+  }
+  async function idbDo(mode, fn) {
+    const db = await idb();
+    return new Promise((res, rej) => { const q = fn(db.transaction('kv', mode).objectStore('kv')); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+  }
+  const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
+  async function restoreBgm() {
+    try {
+      const v = await idbDo('readonly', (s) => s.get('bgm'));
+      if (v && v.data) { bgmData = v.data; bgmType = v.type || ''; $('bgmMsg').textContent = '保存した音があります(' + mb(bgmData.byteLength) + ')。はじめると、流れます。'; }
+    } catch (e) {}
+  }
+  $('bgm').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    try {
+      bgmData = await f.arrayBuffer(); bgmType = f.type || '';
+      try { await idbDo('readwrite', (s) => s.put({ data: bgmData, type: bgmType }, 'bgm')); $('bgmMsg').textContent = '音を読み込みました(' + mb(bgmData.byteLength) + ')。この端末の中にだけ保存されます。'; }
+      catch (err) { $('bgmMsg').textContent = '音を読み込みました(保存はできませんでした。今回だけ使えます)。'; }
+    } catch (err) { $('bgmMsg').textContent = '読み込めませんでした。別のファイルを選んでください。'; }
+  };
+  $('bgmClear').onclick = async () => {
+    bgmData = null;
+    try { await idbDo('readwrite', (s) => s.delete('bgm')); } catch (e) {}
+    $('bgmMsg').textContent = '保存した音を消しました。';
+  };
+  // 頭の無音や、立ち上がりの小さい部分は、ループの頭に含めない
+  function trimStart(buf) {
+    const d = buf.getChannelData(0), w = Math.round(buf.sampleRate * 0.1), r = [];
+    for (let i = 0; i + w <= d.length; i += w) { let s = 0; for (let j = i; j < i + w; j++) s += d[j] * d[j]; r.push(Math.sqrt(s / w)); }
+    const med = r.slice().sort((x, y) => x - y)[r.length >> 1] || 0;
+    let k = 0; while (k < r.length - 1 && r[k] < med * 0.6) k++;
+    return Math.min(k * 0.1, 3, Math.max(0, buf.duration - 1));
+  }
+  async function startBgm() {
+    if (!bgmData || !actx) return;
+    try { await actx.resume(); } catch (e) {}
+    bgmGain = actx.createGain(); bgmGain.gain.value = LOW; bgmGain.connect(actx.destination);
+    try {   // 音声だけを取り出して、つなぎ目なくループする
+      const buf = await new Promise((res, rej) => { const p = actx.decodeAudioData(bgmData.slice(0), res, rej); if (p && p.catch) p.catch(rej); });
+      const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
+      src.loopStart = trimStart(buf); src.loopEnd = buf.duration;
+      src.connect(bgmGain); src.start(0, src.loopStart);
+    } catch (e) {   // 取り出せない形式のときは、再生用の要素から流す
+      const v = document.createElement('video'); v.loop = true; v.playsInline = true; v.style.display = 'none';
+      v.src = URL.createObjectURL(new Blob([bgmData], { type: bgmType })); document.body.appendChild(v);
+      try { actx.createMediaElementSource(v).connect(bgmGain); await v.play(); } catch (e2) {}
+    }
+    applyVolume();
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && actx && dancing) actx.resume().catch(() => {}); });
+
   // ---------- 開始 ----------
   let started = false, stream = null;
   function fail(msg) { $('msg').textContent = msg; $('go').disabled = false; }
@@ -280,6 +349,11 @@
     if (started) return;
     $('go').disabled = true;
     $('msg').textContent = '許可を確認しています…';
+    // 音は、ボタンを押したこの場面で使えるようにしておく(iPhoneの決まり)
+    try {
+      actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
+      if (navigator.audioSession) navigator.audioSession.type = 'playback';   // 消音スイッチがオンでも鳴らす(対応する端末のみ)
+    } catch (e) { actx = null; }
     put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
@@ -318,15 +392,19 @@
     scene.addEventListener('loaded', () => { if (scene.renderer) scene.renderer.setClearColor(0x000000, 0); });
     $('host').appendChild(scene);
     $('hud').hidden = false;
+    startBgm();
   }
   $('go').onclick = start;
   $('dance').onclick = () => {
     const p = document.getElementById('pet'), c = p && p.components.pet;
     if (!c) return;
     c.danceOn = !c.danceOn;
+    if (!c.danceOn && c.mode === 'dance') { c.mode = 'idle'; c.timer = 1; }
+    setDancing(c.danceOn);   // やめると、音も止まる
     $('dance').textContent = c.danceOn ? 'ダンスをやめる' : 'ダンス';
   };
   $('exit').onclick = () => { location.reload(); };   // カメラを確実に止めるため、ページを開き直す
 
+  restoreBgm();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();

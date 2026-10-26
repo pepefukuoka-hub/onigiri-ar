@@ -54,3 +54,5 @@ body.ar #host { display: block; }
 #find { flex: 1; min-width: 0; text-align: center; color: #fff; font-weight: 700; font-size: 16px;
   background: rgba(20,20,20,.7); border-radius: 12px; padding: 9px 12px; }
 #find:empty { visibility: hidden; }
+button.small { width: auto; min-height: 36px; padding: 6px 14px; font-size: 14px; align-self: flex-start; }
+input[type=file] { font: inherit; color: var(--fg); width: 100%; }

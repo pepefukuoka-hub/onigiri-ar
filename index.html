@@ -40,12 +40,18 @@
     <option value="1.6">高め(1.6 m)</option>
   </select>
 
+  <label for="bgm">音楽(自分のビデオか、音声のファイル)</label>
+  <input type="file" id="bgm" accept="audio/*,video/*">
+  <p class="msg" id="bgmMsg">選ぶと、その音を、ループで流します。おともが視界にいる間は大きく、外れると小さくなります。</p>
+  <button type="button" id="bgmClear" class="small">保存した音を消す</button>
+
   <button type="button" id="go" class="primary">はじめる</button>
   <p class="msg" id="msg" role="status"></p>
 
   <ul class="tips">
     <li>はじめに、モーションとカメラの許可を求められます。位置情報は使いません。</li>
     <li>スマホを、足元に向けてください。おともが歩いています。</li>
+    <li>はじめから、踊ります。「ダンスをやめる」を押すと、踊りも音も止まります。</li>
     <li>おともを、タップすると、ぴょんと跳ねます。</li>
     <li>映像は、この端末の中だけで使います。どこにも送りません。</li>
   </ul>
@@ -55,7 +61,7 @@
 <div id="host"></div>
 <div id="hud" hidden>
   <button type="button" id="exit">戻る</button>
-  <button type="button" id="dance">ダンス</button>
+  <button type="button" id="dance">ダンスをやめる</button>
   <div id="find" aria-live="polite"></div>
 </div>
 
