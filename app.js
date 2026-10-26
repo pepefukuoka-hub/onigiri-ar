@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 18;
+  const VER = 19;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -251,6 +251,11 @@
         const cp = this.cp, wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 
         if (!this.started) {
+          // 端末の向きが届くまで(最大2秒)待ってから置く。届く前の向きで置くと、本当の「左」からずれる
+          if (this.t0 == null) this.t0 = time;
+          const dl = this.el.sceneEl.querySelector('[device-look]'), dlc = dl && dl.components['device-look'];
+          if (!(dlc && dlc.count > 2) && time - this.t0 < 2000) { this.el.object3D.visible = false; return; }
+          this.el.object3D.visible = true;
           this.started = true;
           // はじめは、視界に入らないように、あなたの真左に置く(左を向くと見つかる)
           const lx = this.heading.z, lz = -this.heading.x;
@@ -330,7 +335,12 @@
         else if (this.pp.x < -1) msg = '← 左にいるよ';
         else if (this.pp.y < -1) msg = '↓ 足元を見て';
         else if (this.pp.y > 1) msg = '↑ 上にいるよ';
-        if (msg !== this.shown) { this.shown = msg; find.textContent = msg; }
+        if (msg !== this.shown) {
+          this.shown = msg; find.textContent = msg;
+          const big = { '→ 右にいるよ': '右を向いて ▶', '← 左にいるよ': '◀ 左を向いて', '↓ 足元を見て': '▼ 足元を見て', '↑ 上にいるよ': '▲ 上を向いて' }[msg] || '';
+          $('arrow').textContent = this.seenOnce ? '' : big;   // はじめて見つけるまでは、大きく案内する
+        }
+        if (this.seenOnce && $('arrow').textContent) $('arrow').textContent = '';
       }
     });
   }

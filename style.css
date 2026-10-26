@@ -67,3 +67,7 @@ body.locked #lock { display: flex; }
 body.locked #start { display: none; }
 #lockForm { display: flex; flex-direction: column; gap: 10px; }
 input[type=password] { font: inherit; width: 100%; padding: 12px 14px; min-height: 48px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); }
+#arrow { display: none; }
+body.ar #arrow { display: block; position: fixed; z-index: 9; left: 0; right: 0; top: 42%; text-align: center; pointer-events: none;
+  font-size: 30px; font-weight: 800; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,.7); letter-spacing: .04em; }
+#arrow:empty { display: none !important; }
