@@ -4,10 +4,10 @@
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 
-  $('size').value = get('onigiri.size', '0.5') || '0.5';
+  $('size').value = get('onigiri.size2', '0.8') || '0.8';
   $('eye').value = get('onigiri.eye', '1.4') || '1.4';
   $('dist').value = get('onigiri.dist2', '2') || '2';
-  if (!$('size').value) $('size').value = '0.5';
+  if (!$('size').value) $('size').value = '0.8';
   if (!$('eye').value) $('eye').value = '1.4';
   if (!$('dist').value) $('dist').value = '2';
 
@@ -87,7 +87,7 @@
     }
 
     AFRAME.registerComponent('pet', {
-      schema: { size: { default: 0.5 }, dist: { default: 2 } },
+      schema: { size: { default: 0.8 }, dist: { default: 2 } },
       init: function () {
         const CY = 0.48;                                  // 体の中心の高さ(足は 0.17)
         const root = this.el.object3D;
@@ -354,7 +354,7 @@
       actx = new (window.AudioContext || window.webkitAudioContext)(); actx.resume();
       if (navigator.audioSession) navigator.audioSession.type = 'playback';   // 消音スイッチがオンでも鳴らす(対応する端末のみ)
     } catch (e) { actx = null; }
-    put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
+    put('onigiri.size2', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
     try {
