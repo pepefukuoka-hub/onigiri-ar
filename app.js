@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 16;
+  const VER = 17;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -75,6 +75,31 @@
           this.euler.set(this.pitch, this.yaw, 0, 'YXZ');
           o.quaternion.setFromEuler(this.euler);
         }
+      }
+    });
+
+    // 歩数を数えて、歩いた分だけ、自分(カメラ)の位置を進める。向きは、スマホが向いている方向
+    AFRAME.registerComponent('step-walk', {
+      init: function () {
+        this.base = 9.8; this.prevD = 0; this.last = 0; this.pend = { x: 0, z: 0 };
+        window.addEventListener('devicemotion', (e) => {
+          const g = e.accelerationIncludingGravity; if (!g) return;
+          const m = Math.hypot(g.x || 0, g.y || 0, g.z || 0), t = performance.now();
+          this.base += (m - this.base) * 0.05;          // 重力の分は、ゆっくり追従させて引く
+          const d = m - this.base;
+          if (d > 1.4 && this.prevD <= 1.4 && t - this.last > 320) { this.last = t; this.onStep(); }
+          this.prevD = d;
+        });
+      },
+      onStep: function () {
+        const pe = this.el.sceneEl.querySelector('#pet'), p = pe && pe.components.pet; if (!p) return;
+        stepCount++;
+        this.pend.x += p.heading.x * 0.7; this.pend.z += p.heading.z * 0.7;   // 1歩 約70cm
+      },
+      tick: function (time, dtms) {
+        const f = 1 - Math.exp(-Math.min(dtms, 100) / 1000 * 8), p = this.el.object3D.position;   // 1歩ぶんを、なめらかに進める
+        const dx = this.pend.x * f, dz = this.pend.z * f;
+        p.x += dx; p.z += dz; this.pend.x -= dx; this.pend.z -= dz;
       }
     });
 
@@ -196,6 +221,12 @@
         const l = Math.hypot(hx, hz);
         if (l > 0.05) { this.heading.x = hx / l; this.heading.z = hz / l; }
       },
+      // 離れたら、自分(カメラ)の近くまで、走って追いかける
+      chase: function () {
+        const dx = this.el.object3D.position.x - this.cp.x, dz = this.el.object3D.position.z - this.cp.z, l = Math.hypot(dx, dz) || 1;
+        this.target.x = this.cp.x + dx / l * 0.8 * this.data.dist; this.target.z = this.cp.z + dz / l * 0.8 * this.data.dist;
+        this.mode = 'walk'; this.run = true;
+      },
       pickTarget: function (run) {
         const a = Math.random() * Math.PI * 2, r = (0.5 + Math.random() * 0.5) * this.data.dist;   // まわりのどこかへ(画面の向きには合わせない)
         this.target.x = this.cp.x + Math.sin(a) * r; this.target.z = this.cp.z + Math.cos(a) * r;
@@ -221,9 +252,9 @@
         }
 
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
-        if (dC > this.data.dist + 0.05 && !this.run && !this.danceOn) this.pickTarget(true);   // 決めた距離より離れたら、戻る
+        if (dC > this.data.dist + 0.3 && !this.run) this.chase();   // 踊っていても、止まっていても、離れたら追いかける
 
-        if (this.danceOn && this.mode !== 'dance') { this.mode = 'dance'; this.run = false; }   // 踊る設定のときは、いつでも踊る
+        if (this.danceOn && this.mode !== 'dance' && !this.run) { this.mode = 'dance'; }   // 踊る設定のときは、追いかけていないとき、いつでも踊る
         if (this.mode === 'idle') {
           this.timer -= dt;
           if (this.danceOn) this.mode = 'dance';
@@ -234,7 +265,8 @@
           if (!this.danceOn) { this.mode = 'idle'; this.timer = 1; }
           this.yaw += wrap(Math.atan2(cp.x - pos.x, cp.z - pos.z) - this.yaw) * Math.min(1, dt * 4);
         } else {
-          const dx = this.target.x - pos.x, dz = this.target.z - pos.z, d = Math.hypot(dx, dz), sp = this.run ? 1.3 : 0.45;
+          if (this.run) this.chase();   // 追いかけている間は、自分の動きに合わせて、行き先を更新する
+          const dx = this.target.x - pos.x, dz = this.target.z - pos.z, d = Math.hypot(dx, dz), sp = this.run ? 2.6 : 0.45;
           if (d < 0.04) { this.mode = 'idle'; this.run = false; this.timer = 1.5 + Math.random() * 2.5; }
           else {
             const st = Math.min(d, sp * dt);
@@ -242,14 +274,10 @@
             this.yaw += wrap(Math.atan2(dx, dz) - this.yaw) * Math.min(1, dt * 8);
           }
         }
-        // 決めた距離の外には、出さない
-        const ex = pos.x - cp.x, ez = pos.z - cp.z, el = Math.hypot(ex, ez), R = this.data.dist;
-        if (el > R) { pos.x = cp.x + ex / el * R; pos.z = cp.z + ez / el * R; }
-
         // ---- 動き ----
         const moving = this.mode === 'walk';
         this.amp += ((moving ? 1 : 0) - this.amp) * Math.min(1, dt * 8);
-        if (moving) this.phase += dt * (this.run ? 16 : 9);
+        if (moving) this.phase += dt * (this.run ? 20 : 9);
         const sw = Math.sin(this.phase) * this.amp, t = time / 1000;
         this.legL.rotation.x = sw * 0.75; this.legR.rotation.x = -sw * 0.75;
         let by = Math.abs(Math.sin(this.phase)) * 0.035 * (this.run ? 1.6 : 1) * this.amp + Math.sin(t * 3) * 0.006 * (1 - this.amp);
@@ -304,6 +332,7 @@
   // 自分で選んだビデオや音声の音を、ループで流す。おともが視界にいる間は大きく、外れると小さくする。
   // 音のファイルは、この端末の中(IndexedDB)にだけ保存し、公開サイトには入れない。
   const LOW = 0.12;
+  let stepCount = 0;
   let actx = null, bgmGain = null, bgmData = null, bgmType = '', seen = false, dancing = true, sndState = '';
   function applyVolume() {
     if (!bgmGain) return;
@@ -311,7 +340,7 @@
   }
   function showSnd() {   // 画面の下に、音の状態を出す(鳴らないときの原因を知るため)
     const e = $('snd'); if (!e) return;
-    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 版 '+VER;
+    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? ' / ダンス中' : ' / ダンス停止中') + ' / 歩数 ' + stepCount + ' / 版 '+VER;
     if (e.textContent !== t) e.textContent = t;
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
@@ -406,7 +435,9 @@
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
     try {
       if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        const pm = (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') ? DeviceMotionEvent.requestPermission().catch(() => 'denied') : null;   // 歩数用
         const r = await DeviceOrientationEvent.requestPermission();
+        if (pm) await pm;
         if (r !== 'granted') { fail('モーションと方向のアクセスが許可されていません。設定 > Safari > モーションと方向のアクセス をオンにして、ページを開き直してください。'); return; }
       }
     } catch (e) { fail('モーションの許可を取得できませんでした。ページを開き直して、もう一度押してください。'); return; }
@@ -432,7 +463,7 @@
     scene.setAttribute('renderer', 'alpha: true; antialias: true');
     scene.setAttribute('embedded', '');
     scene.innerHTML =
-      '<a-entity camera="fov: 65; near: 0.05; far: 50" position="0 ' + eye + ' 0" device-look></a-entity>' +
+      '<a-entity camera="fov: 65; near: 0.05; far: 50" position="0 ' + eye + ' 0" device-look step-walk></a-entity>' +
       '<a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>' +
       '<a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="1 3 2"></a-entity>' +
       '<a-entity id="pet" pet="size: ' + size + '; dist: ' + dist + '"></a-entity>';
