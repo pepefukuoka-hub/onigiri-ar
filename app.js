@@ -280,10 +280,15 @@
   // 自分で選んだビデオや音声の音を、ループで流す。おともが視界にいる間は大きく、外れると小さくする。
   // 音のファイルは、この端末の中(IndexedDB)にだけ保存し、公開サイトには入れない。
   const LOW = 0.12;
-  let actx = null, bgmGain = null, bgmData = null, bgmType = '', seen = false, dancing = true;
+  let actx = null, bgmGain = null, bgmData = null, bgmType = '', seen = false, dancing = true, sndState = '';
   function applyVolume() {
     if (!bgmGain) return;
     bgmGain.gain.setTargetAtTime(!dancing ? 0 : (seen ? 1 : LOW), actx.currentTime, 0.15);
+  }
+  function showSnd() {   // 画面の下に、音の状態を出す(鳴らないときの原因を知るため)
+    const e = $('snd'); if (!e) return;
+    const t = !bgmData && !sndState ? '音: 未選択(スタート画面で選ぶと流れます)' : '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? '' : ' / 停止中');
+    if (e.textContent !== t) e.textContent = t;
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
   function setDancing(v) { dancing = v; applyVolume(); if (v && actx && actx.state === 'suspended') actx.resume().catch(() => {}); }
@@ -324,7 +329,9 @@
     return Math.min(k * 0.1, 3, Math.max(0, buf.duration - 1));
   }
   async function startBgm() {
-    if (!bgmData || !actx) return;
+    if (!bgmData) { sndState = ''; return; }
+    if (!actx) { sndState = 'この端末では音を使えません'; return; }
+    sndState = '読み込み中';
     try { await actx.resume(); } catch (e) {}
     bgmGain = actx.createGain(); bgmGain.gain.value = LOW; bgmGain.connect(actx.destination);
     try {   // 音声だけを取り出して、つなぎ目なくループする
@@ -332,13 +339,23 @@
       const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
       src.loopStart = trimStart(buf); src.loopEnd = buf.duration;
       src.connect(bgmGain); src.start(0, src.loopStart);
+      sndState = '再生中(' + buf.duration.toFixed(1) + '秒をループ)';
     } catch (e) {   // 取り出せない形式のときは、再生用の要素から流す
       const v = document.createElement('video'); v.loop = true; v.playsInline = true; v.style.display = 'none';
       v.src = URL.createObjectURL(new Blob([bgmData], { type: bgmType })); document.body.appendChild(v);
-      try { actx.createMediaElementSource(v).connect(bgmGain); await v.play(); } catch (e2) {}
+      try {
+        actx.createMediaElementSource(v).connect(bgmGain);
+        await v.play(); sndState = '再生中(要素)';
+      } catch (e2) {
+        sndState = '画面をタップすると鳴ります';
+        const go = () => { v.play().then(() => { sndState = '再生中(要素)'; window.removeEventListener('pointerup', go); }).catch(() => { sndState = '再生できません(形式が合わない可能性)'; }); };
+        window.addEventListener('pointerup', go);
+      }
     }
     applyVolume();
   }
+  // 画面をさわったときに、止まっていたら音を再開する
+  window.addEventListener('pointerup', () => { if (actx && dancing && actx.state !== 'running') actx.resume().catch(() => {}); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden && actx && dancing) actx.resume().catch(() => {}); });
 
   // ---------- 開始 ----------
@@ -393,6 +410,7 @@
     $('host').appendChild(scene);
     $('hud').hidden = false;
     startBgm();
+    setInterval(showSnd, 700); showSnd();
   }
   $('go').onclick = start;
   $('dance').onclick = () => {

@@ -56,3 +56,6 @@ body.ar #host { display: block; }
 #find:empty { visibility: hidden; }
 button.small { width: auto; min-height: 36px; padding: 6px 14px; font-size: 14px; align-self: flex-start; }
 input[type=file] { font: inherit; color: var(--fg); width: 100%; }
+#snd { display: none; }
+body.ar #snd { display: block; position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; pointer-events: none; text-align: center; font-size: 12px; color: #fff;
+  background: rgba(20,20,20,.55); padding: 6px 12px max(6px, env(safe-area-inset-bottom, 0px)); }
