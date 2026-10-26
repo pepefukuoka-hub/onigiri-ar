@@ -287,7 +287,7 @@
   }
   function showSnd() {   // 画面の下に、音の状態を出す(鳴らないときの原因を知るため)
     const e = $('snd'); if (!e) return;
-    const t = !bgmData && !sndState ? '音: 未選択(スタート画面で選ぶと流れます)' : '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? '' : ' / 停止中');
+    const t = '音: ' + (sndState || '準備中') + (actx ? ' / ' + actx.state : '') + (bgmGain ? ' / 音量 ' + bgmGain.gain.value.toFixed(2) : '') + (dancing ? '' : ' / 停止中');
     if (e.textContent !== t) e.textContent = t;
   }
   function setSeen(v) { if (v === seen) return; seen = v; applyVolume(); }
@@ -303,46 +303,52 @@
   const mb = (n) => (n / 1048576).toFixed(1) + ' MB';
   async function restoreBgm() {
     try {
-      const v = await idbDo('readonly', (s) => s.get('bgm'));
-      if (v && v.data) { bgmData = v.data; bgmType = v.type || ''; $('bgmMsg').textContent = '保存した音があります(' + mb(bgmData.byteLength) + ')。はじめると、流れます。'; }
+      const v = await idbDo('readonly', (s) => s.get('bgm2'));
+      if (v && v.data) { bgmData = v.data; bgmType = v.type || ''; $('bgmMsg').textContent = '自分で選んだ音を使います(' + mb(bgmData.byteLength) + ')。'; }
+      idbDo('readwrite', (s) => s.delete('bgm')).catch(() => {});   // 前の版で保存した音は、もう使わない
     } catch (e) {}
   }
   $('bgm').onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return;
     try {
       bgmData = await f.arrayBuffer(); bgmType = f.type || '';
-      try { await idbDo('readwrite', (s) => s.put({ data: bgmData, type: bgmType }, 'bgm')); $('bgmMsg').textContent = '音を読み込みました(' + mb(bgmData.byteLength) + ')。この端末の中にだけ保存されます。'; }
+      try { await idbDo('readwrite', (s) => s.put({ data: bgmData, type: bgmType }, 'bgm2')); $('bgmMsg').textContent = '自分の音を読み込みました(' + mb(bgmData.byteLength) + ')。この端末の中にだけ保存されます。'; }
       catch (err) { $('bgmMsg').textContent = '音を読み込みました(保存はできませんでした。今回だけ使えます)。'; }
     } catch (err) { $('bgmMsg').textContent = '読み込めませんでした。別のファイルを選んでください。'; }
   };
   $('bgmClear').onclick = async () => {
     bgmData = null;
-    try { await idbDo('readwrite', (s) => s.delete('bgm')); } catch (e) {}
-    $('bgmMsg').textContent = '保存した音を消しました。';
+    try { await idbDo('readwrite', (s) => s.delete('bgm2')); } catch (e) {}
+    $('bgmMsg').textContent = '標準の音楽にもどしました。';
   };
-  // 頭の無音や、立ち上がりの小さい部分は、ループの頭に含めない
-  function trimStart(buf) {
+  // 頭と終わりの、無音や小さい部分は、ループに含めない
+  function trimRange(buf) {
     const d = buf.getChannelData(0), w = Math.round(buf.sampleRate * 0.1), r = [];
     for (let i = 0; i + w <= d.length; i += w) { let s = 0; for (let j = i; j < i + w; j++) s += d[j] * d[j]; r.push(Math.sqrt(s / w)); }
     const med = r.slice().sort((x, y) => x - y)[r.length >> 1] || 0;
-    let k = 0; while (k < r.length - 1 && r[k] < med * 0.6) k++;
-    return Math.min(k * 0.1, 3, Math.max(0, buf.duration - 1));
+    let k = 0, m = r.length - 1;
+    while (k < r.length - 1 && r[k] < med * 0.6) k++;
+    while (m > k && r[m] < med * 0.6) m--;
+    const start = Math.min(k * 0.1, 3), end = Math.min(buf.duration, (m + 1) * 0.1);
+    return end - start > 1 ? [start, end] : [0, buf.duration];
   }
   async function startBgm() {
-    if (!bgmData) { sndState = ''; return; }
     if (!actx) { sndState = 'この端末では音を使えません'; return; }
     sndState = '読み込み中';
+    let data = bgmData;   // 自分で選んだ音があればそれを、なければ、入れてある標準の音楽を使う
+    if (!data) { try { const r = await fetch('bgm.m4a'); data = await r.arrayBuffer(); } catch (e) {} }
+    if (!data) { sndState = '音楽を読み込めません'; return; }
     try { await actx.resume(); } catch (e) {}
     bgmGain = actx.createGain(); bgmGain.gain.value = LOW; bgmGain.connect(actx.destination);
     try {   // 音声だけを取り出して、つなぎ目なくループする
-      const buf = await new Promise((res, rej) => { const p = actx.decodeAudioData(bgmData.slice(0), res, rej); if (p && p.catch) p.catch(rej); });
+      const buf = await new Promise((res, rej) => { const p = actx.decodeAudioData(data.slice(0), res, rej); if (p && p.catch) p.catch(rej); });
       const src = actx.createBufferSource(); src.buffer = buf; src.loop = true;
-      src.loopStart = trimStart(buf); src.loopEnd = buf.duration;
+      const tr = trimRange(buf); src.loopStart = tr[0]; src.loopEnd = tr[1];
       src.connect(bgmGain); src.start(0, src.loopStart);
-      sndState = '再生中(' + buf.duration.toFixed(1) + '秒をループ)';
+      sndState = '再生中(' + (tr[1] - tr[0]).toFixed(0) + '秒をループ)';
     } catch (e) {   // 取り出せない形式のときは、再生用の要素から流す
       const v = document.createElement('video'); v.loop = true; v.playsInline = true; v.style.display = 'none';
-      v.src = URL.createObjectURL(new Blob([bgmData], { type: bgmType })); document.body.appendChild(v);
+      v.src = URL.createObjectURL(new Blob([data], { type: bgmType || 'audio/mp4' })); document.body.appendChild(v);
       try {
         actx.createMediaElementSource(v).connect(bgmGain);
         await v.play(); sndState = '再生中(要素)';
