@@ -6,10 +6,10 @@
 
   $('size').value = get('onigiri.size', '0.5') || '0.5';
   $('eye').value = get('onigiri.eye', '1.4') || '1.4';
-  $('dist').value = get('onigiri.dist', '1.6') || '1.6';
+  $('dist').value = get('onigiri.dist2', '2') || '2';
   if (!$('size').value) $('size').value = '0.5';
   if (!$('eye').value) $('eye').value = '1.4';
-  if (!$('dist').value) $('dist').value = '1.6';
+  if (!$('dist').value) $('dist').value = '2';
 
   function loadScript(src) {
     return new Promise((resolve, reject) => {
@@ -87,7 +87,7 @@
     }
 
     AFRAME.registerComponent('pet', {
-      schema: { size: { default: 0.5 }, dist: { default: 1.6 } },
+      schema: { size: { default: 0.5 }, dist: { default: 2 } },
       init: function () {
         const CY = 0.48;                                  // 体の中心の高さ(足は 0.17)
         const root = this.el.object3D;
@@ -280,7 +280,7 @@
     if (started) return;
     $('go').disabled = true;
     $('msg').textContent = '許可を確認しています…';
-    put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist', $('dist').value);
+    put('onigiri.size', $('size').value); put('onigiri.eye', $('eye').value); put('onigiri.dist2', $('dist').value);
 
     // 1. モーション(iPhoneは、ボタンを押したこの場面で許可を求める必要がある)
     try {
