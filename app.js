@@ -63,9 +63,9 @@
     const BLACK = new THREE.MeshStandardMaterial({ color: 0x1b1b1d, roughness: 0.45 });
     const WHITE = new THREE.MeshStandardMaterial({ color: 0xf7f6f1, roughness: 0.85 });
 
-    // 体の形: まるい三角形(おにぎり)。下が広く、上がせまい。前向きが +z
-    const BX = 0.46, BZ = 0.40, BYU = 0.40, BYL = 0.30;
-    const widthAt = (yu) => 1.02 - 0.36 * Math.pow((yu + 1) / 2, 1.1);
+    // 体の形: 横に広い、まるいおにぎり。下がやや広く、上はなだらかな丸み。前向きが +z
+    const BX = 0.5, BZ = 0.42, BYU = 0.46, BYL = 0.31;
+    const widthAt = (yu) => 1.0 - 0.24 * Math.pow((yu + 1) / 2, 1.3);
     function bodyGeometry() {
       const g = new THREE.SphereGeometry(1, 56, 40), p = g.attributes.position;
       for (let i = 0; i < p.count; i++) {
@@ -89,7 +89,7 @@
     AFRAME.registerComponent('pet', {
       schema: { size: { default: 0.5 }, dist: { default: 1.6 } },
       init: function () {
-        const CY = 0.47;                                  // 体の中心の高さ(足は 0.17)
+        const CY = 0.48;                                  // 体の中心の高さ(足は 0.17)
         const root = this.el.object3D;
         root.scale.setScalar(this.data.size);
         const body = this.body = new THREE.Group();       // 向き・弾み・ゆれ
@@ -99,38 +99,38 @@
         torso.position.y = CY; body.add(torso);
 
         // 目
-        const eyeY = CY + 0.13;
+        const eyeY = CY + 0.09;
         this.eyes = []; this.pupils = [];
-        [-0.13, 0.13].forEach((x) => {
+        [-0.145, 0.145].forEach((x) => {
           const g = new THREE.Group();
           g.position.set(x, eyeY, surfaceZ(x, eyeY - CY) + 0.012);
           const h = 0.01, zx = (surfaceZ(x + h, eyeY - CY) - surfaceZ(x - h, eyeY - CY)) / (2 * h), zy = (surfaceZ(x, eyeY - CY + h) - surfaceZ(x, eyeY - CY - h)) / (2 * h);
           g.rotation.set(Math.atan(zy), Math.atan(-zx), 0, 'YXZ');   // 体の表面にそわせる
-          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.083, 0.012, 10, 40), BLACK);
-          const white = new THREE.Mesh(new THREE.CircleGeometry(0.083, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+          const ring = new THREE.Mesh(new THREE.TorusGeometry(0.088, 0.011, 10, 40), BLACK);
+          const white = new THREE.Mesh(new THREE.CircleGeometry(0.088, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
           white.position.z = -0.002;
-          const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.03, 20), new THREE.MeshBasicMaterial({ color: 0x111111 }));
+          const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.024, 20), new THREE.MeshBasicMaterial({ color: 0x111111 }));
           pupil.position.z = 0.003;
           g.add(white, ring, pupil); body.add(g);
           this.eyes.push(g); this.pupils.push(pupil);
         });
         // 口
-        const my = CY - 0.04;
-        const mouth = tube([[-0.075, 0.012, 0], [-0.04, -0.012, 0], [0, -0.02, 0], [0.04, -0.012, 0], [0.075, 0.012, 0]], 0.007);
+        const my = CY - 0.075;
+        const mouth = tube([[-0.06, 0.012, 0], [-0.03, -0.01, 0], [0, -0.016, 0], [0.03, -0.01, 0], [0.06, 0.012, 0]], 0.0065);
         mouth.position.set(0, my, surfaceZ(0, my - CY) + 0.008); body.add(mouth);
 
-        // 腕(のりのような細い線)。ひじを外に張って、手は頭のわき
+        // 腕(のりのような細い線)。体のわきで、小さく曲げる
         const arm = (s) => {
-          const pv = new THREE.Group(); pv.position.set(s * 0.37, CY + 0.06, 0);
-          pv.add(tube([[0, 0, 0], [s * 0.08, 0.0, 0], [s * 0.15, 0.07, 0], [s * 0.14, 0.16, 0], [s * 0.07, 0.21, 0]], 0.012));
-          const hand = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), BLACK); hand.position.set(s * 0.07, 0.21, 0); pv.add(hand);
+          const pv = new THREE.Group(); pv.position.set(s * 0.48, CY + 0.0, 0);
+          pv.add(tube([[0, 0, 0], [s * 0.06, 0.0, 0], [s * 0.11, 0.04, 0], [s * 0.09, 0.09, 0], [s * 0.03, 0.10, 0]], 0.012));
+          const hand = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), BLACK); hand.position.set(s * 0.03, 0.10, 0); pv.add(hand);
           body.add(pv); return pv;
         };
         this.armL = arm(-1); this.armR = arm(1);
 
         // 足(細い線)。つけ根で前後にふる
         const leg = (s) => {
-          const pv = new THREE.Group(); pv.position.set(s * 0.1, 0.2, 0);
+          const pv = new THREE.Group(); pv.position.set(s * 0.14, 0.2, 0);
           pv.add(tube([[0, 0, 0], [0, -0.07, 0], [s * 0.012, -0.13, 0.01], [0, -0.17, 0.045]], 0.014));
           const foot = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), BLACK); foot.position.set(0, -0.17, 0.05); pv.add(foot);
           body.add(pv); return pv;
@@ -146,7 +146,7 @@
         shadow.rotation.x = -Math.PI / 2; shadow.position.y = 0.004; root.add(shadow);
 
         // ふるまいの状態
-        this.mode = 'idle'; this.timer = 1; this.target = { x: 0, z: 0 }; this.run = false;
+        this.mode = 'idle'; this.timer = 1; this.danceOn = false; this.dAmp = 0; this.target = { x: 0, z: 0 }; this.run = false;
         this.yaw = 0; this.phase = 0; this.amp = 0; this.hop = -1; this.blink = 3; this.blinkT = -1; this.away = 0; this.started = false;
         this.heading = { x: 0, z: 1 }; this.shown = '';
         this.cp = new THREE.Vector3(); this.f = new THREE.Vector3(); this.u = new THREE.Vector3(); this.pp = new THREE.Vector3();
@@ -204,8 +204,13 @@
 
         if (this.mode === 'idle') {
           this.timer -= dt;
-          if (this.timer <= 0) { if (Math.random() < 0.3) this.timer = 1.5 + Math.random() * 2; else this.pickTarget(false); }
+          if (this.danceOn || (this.timer <= 0 && Math.random() < 0.35)) { this.mode = 'dance'; this.timer = 4 + Math.random() * 3; }
+          else if (this.timer <= 0) { if (Math.random() < 0.3) this.timer = 1.5 + Math.random() * 2; else this.pickTarget(false); }
           this.yaw += wrap(Math.atan2(cp.x - pos.x, cp.z - pos.z) - this.yaw) * Math.min(1, dt * 4);   // こちらを向く
+        } else if (this.mode === 'dance') {
+          this.timer -= dt;
+          if (!this.danceOn && this.timer <= 0) { this.mode = 'idle'; this.timer = 1; }
+          this.yaw += wrap(Math.atan2(cp.x - pos.x, cp.z - pos.z) - this.yaw) * Math.min(1, dt * 4);
         } else {
           const dx = this.target.x - pos.x, dz = this.target.z - pos.z, d = Math.hypot(dx, dz), sp = this.run ? 1.3 : 0.45;
           if (d < 0.04) { this.mode = 'idle'; this.run = false; this.timer = 1.5 + Math.random() * 2.5; }
@@ -232,11 +237,17 @@
           const u = this.hop / 0.6;
           if (u >= 1) this.hop = -1; else { by += 0.3 * Math.sin(Math.PI * u); up = Math.sin(Math.PI * u); }
         }
+        // ダンス: 体を左右にゆらして、リズムに合わせて弾む。腕はかわるがわる上げる
+        this.dAmp += ((this.mode === 'dance' ? 1 : 0) - this.dAmp) * Math.min(1, dt * 6);
+        const da = this.dAmp, w = t * Math.PI * 2 * 1.1, ds = Math.sin(w);
+        by += da * Math.abs(ds) * 0.05;
+        this.legL.rotation.x += da * ds * 0.35; this.legR.rotation.x -= da * ds * 0.35;
         this.body.position.y = by;
-        this.body.rotation.y = this.yaw;
-        this.body.rotation.z = sw * 0.07;
-        this.armL.rotation.z = -up * 1.0 + Math.sin(t * 2.2) * 0.05 + sw * 0.15;
-        this.armR.rotation.z = up * 1.0 - Math.sin(t * 2.2 + 1) * 0.05 + sw * 0.15;
+        this.body.rotation.y = this.yaw + da * 0.3 * Math.sin(w * 0.5);
+        this.body.rotation.z = sw * 0.07 + da * 0.16 * ds;
+        this.body.scale.set(1 + 0.04 * da * Math.cos(w * 2), 1 - 0.04 * da * Math.cos(w * 2), 1);
+        this.armL.rotation.z = -up * 1.0 + Math.sin(t * 2.2) * 0.05 + sw * 0.15 - da * (0.6 + 0.5 * ds);
+        this.armR.rotation.z = up * 1.0 - Math.sin(t * 2.2 + 1) * 0.05 + sw * 0.15 + da * (0.6 - 0.5 * ds);
 
         // まばたきと、視線(カメラの方を見る)
         this.blink -= dt;
@@ -246,7 +257,7 @@
         this.eyes.forEach((e) => { e.scale.y = Math.min(1, sy); });
         const lx0 = cp.x - pos.x, lz0 = cp.z - pos.z, c = Math.cos(this.yaw), s = Math.sin(this.yaw);
         const lx = lx0 * c - lz0 * s, lz = lx0 * s + lz0 * c, ly = cp.y / this.data.size - 0.6, len = Math.hypot(lx, ly, lz) || 1;
-        this.pupils.forEach((p) => { p.position.x = Math.max(-1, Math.min(1, lx / len)) * 0.04; p.position.y = Math.max(-1, Math.min(1, ly / len)) * 0.03; });
+        this.pupils.forEach((p) => { p.position.x = Math.max(-1, Math.min(1, lx / len)) * 0.04 + da * ds * 0.025; p.position.y = Math.max(-1, Math.min(1, ly / len)) * 0.03; });
 
         // 画面の外にいるときは、方向を知らせる
         this.pp.set(pos.x, 0.3 * this.data.size, pos.z).project(cam);
@@ -309,6 +320,12 @@
     $('hud').hidden = false;
   }
   $('go').onclick = start;
+  $('dance').onclick = () => {
+    const p = document.getElementById('pet'), c = p && p.components.pet;
+    if (!c) return;
+    c.danceOn = !c.danceOn;
+    $('dance').textContent = c.danceOn ? 'ダンスをやめる' : 'ダンス';
+  };
   $('exit').onclick = () => { location.reload(); };   // カメラを確実に止めるため、ページを開き直す
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});

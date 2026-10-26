@@ -50,7 +50,7 @@ body.ar #host { display: block; }
 #hud { position: fixed; z-index: 10; left: 0; right: 0; top: 0; display: flex; gap: 8px; align-items: flex-start; pointer-events: none;
   padding: max(10px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px)); }
 #hud > * { pointer-events: auto; }
-#exit { width: auto; min-height: 44px; background: rgba(20,20,20,.7); color: #fff; border-color: transparent; }
-#find { flex: 1; min-width: 0; text-align: center; color: #fff; font-weight: 700; font-size: 18px;
+#exit, #dance { width: auto; min-height: 44px; background: rgba(20,20,20,.7); color: #fff; border-color: transparent; white-space: nowrap; }
+#find { flex: 1; min-width: 0; text-align: center; color: #fff; font-weight: 700; font-size: 16px;
   background: rgba(20,20,20,.7); border-radius: 12px; padding: 9px 12px; }
 #find:empty { visibility: hidden; }
