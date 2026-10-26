@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const VER = 17;
+  const VER = 18;
   const $ = (id) => document.getElementById(id);
   const get = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const put = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
@@ -64,6 +64,9 @@
         fov(); window.addEventListener('resize', fov);
       },
       tick: function () {
+        try { this.look(); } catch (e) {}
+      },
+      look: function () {
         const o = this.el.object3D, d = this.ori, rad = THREE.MathUtils.degToRad;
         if (d) {
           const screenAngle = (screen.orientation && typeof screen.orientation.angle === 'number') ? screen.orientation.angle : (window.orientation || 0);
@@ -96,7 +99,8 @@
         stepCount++;
         this.pend.x += p.heading.x * 0.7; this.pend.z += p.heading.z * 0.7;   // 1歩 約70cm
       },
-      tick: function (time, dtms) {
+      tick: function (time, dtms) { try { this.move(time, dtms); } catch (e) {} },
+      move: function (time, dtms) {
         const f = 1 - Math.exp(-Math.min(dtms, 100) / 1000 * 8), p = this.el.object3D.position;   // 1歩ぶんを、なめらかに進める
         const dx = this.pend.x * f, dz = this.pend.z * f;
         p.x += dx; p.z += dz; this.pend.x -= dx; this.pend.z -= dz;
@@ -180,6 +184,8 @@
         };
         this.legL = leg(-1); this.legR = leg(1);
 
+        body.traverse((o) => { o.frustumCulled = false; });   // 画面の端で、体の一部が消えないように
+
         // 地面のやわらかい影
         const c = document.createElement('canvas'); c.width = c.height = 128;
         const g2 = c.getContext('2d'), gr = g2.createRadialGradient(64, 64, 4, 64, 64, 62);
@@ -223,7 +229,8 @@
       },
       // 離れたら、自分(カメラ)の近くまで、走って追いかける
       chase: function () {
-        const dx = this.el.object3D.position.x - this.cp.x, dz = this.el.object3D.position.z - this.cp.z, l = Math.hypot(dx, dz) || 1;
+        let dx = this.el.object3D.position.x - this.cp.x, dz = this.el.object3D.position.z - this.cp.z, l = Math.hypot(dx, dz);
+        if (l < 0.05) { const a = Math.random() * Math.PI * 2; dx = Math.sin(a); dz = Math.cos(a); l = 1; }   // 真上に重なったときは、ランダムな向きへ
         this.target.x = this.cp.x + dx / l * 0.8 * this.data.dist; this.target.z = this.cp.z + dz / l * 0.8 * this.data.dist;
         this.mode = 'walk'; this.run = true;
       },
@@ -252,7 +259,7 @@
         }
 
         const dC = Math.hypot(pos.x - cp.x, pos.z - cp.z);
-        if (dC > this.data.dist + 0.3 && !this.run) this.chase();   // 踊っていても、止まっていても、離れたら追いかける
+        if (!this.run && (dC > this.data.dist + 0.3 || dC < 0.7)) this.chase();   // 離れたら追いかける。近づきすぎたら、よける   // 踊っていても、止まっていても、離れたら追いかける
 
         if (this.danceOn && this.mode !== 'dance' && !this.run) { this.mode = 'dance'; }   // 踊る設定のときは、追いかけていないとき、いつでも踊る
         if (this.mode === 'idle') {
@@ -463,11 +470,19 @@
     scene.setAttribute('renderer', 'alpha: true; antialias: true');
     scene.setAttribute('embedded', '');
     scene.innerHTML =
-      '<a-entity camera="fov: 65; near: 0.05; far: 50" position="0 ' + eye + ' 0" device-look step-walk></a-entity>' +
+      '<a-entity camera="fov: 65; near: 0.05; far: 500" position="0 ' + eye + ' 0" device-look step-walk></a-entity>' +
       '<a-entity light="type: ambient; color: #ffffff; intensity: 0.8"></a-entity>' +
       '<a-entity light="type: directional; color: #ffffff; intensity: 0.5" position="1 3 2"></a-entity>' +
       '<a-entity id="pet" pet="size: ' + size + '; dist: ' + dist + '"></a-entity>';
-    scene.addEventListener('loaded', () => { if (scene.renderer) scene.renderer.setClearColor(0x000000, 0); });
+    scene.addEventListener('loaded', () => {
+      if (scene.renderer) scene.renderer.setClearColor(0x000000, 0);
+      const cv = scene.canvas;   // iPhoneが描画を止めたとき(メモリ不足など)は、少し待って読み直す
+      if (cv) {
+        let t = 0;
+        cv.addEventListener('webglcontextlost', (e) => { e.preventDefault(); $('find').textContent = '表示が止まりました。復帰します…'; t = setTimeout(() => location.reload(), 3000); });
+        cv.addEventListener('webglcontextrestored', () => { clearTimeout(t); $('find').textContent = ''; });
+      }
+    });
     $('host').appendChild(scene);
     $('hud').hidden = false;
     startBgm();
