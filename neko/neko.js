@@ -42,7 +42,7 @@
   function buildSongs() {
     CATS.forEach((c, i) => {
       const box = document.createElement('div'); box.className = 'song';
-      box.innerHTML = '<b>' + c.name + 'の子の音楽</b><div class="row"><input type="file" accept="audio/*,video/*"><button type="button" hidden>消す</button></div><div class="sm"></div>';
+      box.innerHTML = '<b>' + c.name + 'の子の音楽・動画</b><div class="row"><input type="file" accept="audio/*,video/*"><button type="button" hidden>消す</button></div><div class="sm"></div>';
       const inp = box.querySelector('input'), clr = box.querySelector('button'), sm = box.querySelector('.sm');
       songEls.push({ sm, clr });
       inp.onchange = async () => {
@@ -65,6 +65,21 @@
   const LOW = 0.07;
   let actx = null, sndState = '';
   const players = [null, null, null, null];   // { setGain(v) }
+  const VIDEOS = [null, null, null, null];    // 動画を選んだ子の、再生用の要素
+  const looksVideo = (s) => /^video\//.test(s.type) || /\.(mp4|mov|m4v|webm)$/i.test(s.name);
+  // 動画(緑の背景)なら、その子を動画に入れかえる。映像のない音だけのファイルなら false
+  async function tryVideoCat(i, s, gain) {
+    const v = document.createElement('video'); v.loop = true; v.playsInline = true; v.setAttribute('playsinline', ''); v.muted = true; v.style.display = 'none';
+    v.src = URL.createObjectURL(new Blob([s.data], { type: s.type || 'video/mp4' })); document.body.appendChild(v);
+    const ok = await new Promise((res) => { v.onloadedmetadata = () => res(v.videoWidth > 0); v.onerror = () => res(false); setTimeout(() => res(false), 8000); });
+    if (!ok) { v.remove(); return false; }
+    try { actx.createMediaElementSource(v).connect(gain); } catch (e) {}
+    try { await v.play(); } catch (e) {}
+    const unmute = () => { v.muted = false; if (v.paused) v.play().catch(() => {}); if (!v.paused && !v.muted) window.removeEventListener('pointerup', unmute); };
+    unmute(); window.addEventListener('pointerup', unmute);   // 最初のタップで、再生と音を確実に始める
+    VIDEOS[i] = v; players[i] = { setGain: (x) => gain.gain.setTargetAtTime(x, actx.currentTime, 0.15) };
+    return true;
+  }
   function meow(pitch) {
     if (!actx || actx.state !== 'running') return;
     const t0 = actx.currentTime, o = actx.createOscillator(), f = actx.createBiquadFilter(), g = actx.createGain();
@@ -80,6 +95,7 @@
     for (let i = 0; i < 4; i++) {
       const s = songs[i]; if (!s) continue; n++;
       const gain = actx.createGain(); gain.gain.value = LOW; gain.connect(actx.destination);
+      if (looksVideo(s) && await tryVideoCat(i, s, gain)) continue;
       try {
         const buf = await new Promise((res, rej) => { const p = actx.decodeAudioData(s.data.slice(0), res, rej); if (p && p.catch) p.catch(rej); });
         const src = actx.createBufferSource(); src.buffer = buf; src.loop = true; src.connect(gain); src.start(0);
@@ -224,10 +240,22 @@
           if (e.target.closest && e.target.closest('button')) return;
           const cam = el.sceneEl.camera; if (!cam) return;
           this.rc.setFromCamera({ x: e.clientX / window.innerWidth * 2 - 1, y: -(e.clientY / window.innerHeight) * 2 + 1 }, cam);
-          this.cats.forEach((c, i) => { if (this.rc.intersectObject(c.body, true).length && c.hop < 0) { c.hop = 0; meow(520 + i * 90); } });
+          this.cats.forEach((c, i) => { if (this.rc.intersectObject(c.vidMesh || c.body, true).length && c.hop < 0) { c.hop = 0; if (!c.vid) meow(520 + i * 90); } });
         });
       },
       tick: function (time, dtms) { try { this.step(time, dtms); } catch (e) { if (!this.err) { this.err = 1; console.error(e); } } },
+      // 動画の子: 緑の背景を抜いて、いつもこちらを向く板に貼る
+      attachVideo: function (c, v) {
+        const tx = new THREE.VideoTexture(v); tx.minFilter = THREE.LinearFilter; tx.magFilter = THREE.LinearFilter; tx.generateMipmaps = false;
+        const H = 1.9, W = H * v.videoWidth / v.videoHeight;
+        const mat = new THREE.ShaderMaterial({
+          transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { map: { value: tx } },
+          vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+          fragmentShader: 'uniform sampler2D map; varying vec2 vUv; void main() { vec4 c = texture2D(map, vUv); float d = c.g - max(c.r, c.b); float a = 1.0 - smoothstep(0.12, 0.4, d); c.g = min(c.g, max(c.r, c.b) + 0.02); gl_FragColor = vec4(c.rgb, a); }'
+        });
+        const m = new THREE.Mesh(new THREE.PlaneGeometry(W, H), mat); m.position.y = H / 2 - 0.15; m.frustumCulled = false; m.renderOrder = 3;
+        const holder = new THREE.Group(); holder.add(m); c.root.add(holder); c.vid = holder; c.vidMesh = m; c.body.visible = false;
+      },
       step: function (time, dtms) {
         const cam = this.el.sceneEl.camera; if (!cam) return;
         const dt = Math.min(dtms, 100) / 1000, t = time / 1000, wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
@@ -244,6 +272,8 @@
           const w = (t * c.d.hz + c.d.ph) * Math.PI * 2, ds = Math.sin(w);
           let by = Math.abs(ds) * 0.07, up = 0;
           if (c.hop >= 0) { c.hop += dt; const u = c.hop / 0.6; if (u >= 1) c.hop = -1; else { by += 0.35 * Math.sin(Math.PI * u); up = Math.sin(Math.PI * u); } }
+          if (VIDEOS[i] && !c.vid) this.attachVideo(c, VIDEOS[i]);
+          if (c.vid) { c.vid.position.y = by * 0.5; c.vid.rotation.y = c.yaw; }
           c.body.position.y = by; c.body.rotation.y = c.yaw + 0.3 * Math.sin(w * 0.5); c.body.rotation.z = 0.14 * ds;
           c.body.scale.set(1 + 0.04 * Math.cos(w * 2), 1 - 0.04 * Math.cos(w * 2), 1);
           c.legL.rotation.x = 0.35 * ds; c.legR.rotation.x = -0.35 * ds;
